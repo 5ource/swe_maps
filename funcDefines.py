@@ -65,11 +65,11 @@ def cdec_get_basin_stations_meta(basin_name, type, fpath, debug = 0):
     if debug:
         with pd.option_context('display.max_rows', None, 'display.max_columns', None):
             print(df)
-    stations = []
+    stations = {}
     for index, row in df.iterrows():
         try:
-            stations.append(station([row["Latitude"], row["Longitude"]], type, CDEC_SENSOR_TYPES[type], row["ID"],
-                                    row["Operator"]))
+            stations[row["ID"]] = station([row["Latitude"], row["Longitude"]], type, CDEC_SENSOR_TYPES[type], row["ID"],
+                                    row["Operator"])
             #print row["ID"]
         except Exception as e:
             print "cdec_get_basin_stations_meta Error : ", e.message
@@ -80,10 +80,10 @@ def cdec_get_basin_stations_meta(basin_name, type, fpath, debug = 0):
     return basin_obj
 
 def correct_latlon(basin_obj, correct_latlon_dict):
-    for sta in basin_obj.stations:
+    for sta in basin_obj.stations.itervalues():
         if sta.cdec_id in correct_latlon_dict[basin_obj.name]:
             sta.lat_lon = correct_latlon_dict[basin_obj.name][sta.cdec_id]
 
 def cdec_get_basin_stations_data(basin_obj, wy, fpath, debug = 0):
-    for sta in basin_obj.stations:
+    for sta in basin_obj.stations.itervalues():
         sta.populate_data(wy, fpath, debug)

@@ -47,3 +47,4 @@ class station
 }
 ```
 
+`conda install -n swe_maps -c conda-forge matplotlib`\
