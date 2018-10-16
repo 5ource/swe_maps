@@ -7,7 +7,10 @@ TYPE = "SWE"
 basins = ["Feather"]
 #get cdec sensors locations
 
+#wys = [2015, 2016, 2017]
 wys = [2015, 2016, 2017]
+
+TRAIN_ALPHAS = [0, 0.0001, 0.001, 0.5, 1]
 
 DOWNLOADS       = "downloads/"
 OUTPUT          = "output/"

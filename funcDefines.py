@@ -3,6 +3,10 @@ from objects import *
 from settings import *
 from confidential import *
 
+def water_year(date_inst):
+    if date_inst.month >= 10:
+        return date_inst.year + 1
+    return date_inst.year
 
 def wget_cdec_tables(sensor_type, riverBasin, debug=0):
     CDEC_query_url = "http://cdec.water.ca.gov/dynamicapp/staSearch?sta=&sensor_chk=on&sensor="+ \
@@ -121,23 +125,27 @@ def save_compressed_output(rows, d, map, fname, dirPath, rowsThresh=100, expecte
         hdf5_f.close()
     return rows
 
-def load_compressed_map(fname, d, dirPath, ABS_START_DT):
+def load_row_from_map(fname, row_n, dirPath):
     fpath = dirPath + fname + "_blosc.h5"
-    #print "loading ", fpath
     f = tables.open_file(fpath, mode='r')
+    data = f.root.data[row_n]
+    # print "data[0] = ", data[0]
+    # print "data[1] = ", data[1]
+    # print "data[2] = ", data[2]
+    f.close()
+    return data
+
+def load_compressed_map(fname, d, dirPath, ABS_START_DT):
+    #print "loading ", fpath
     row_n = (d - ABS_START_DT).days
     #print "shape f.root.data = ", np.shape(f.root.data[:])
     #print "R x C = ", R* C
-    data = f.root.data[row_n]
-    #print "data[0] = ", data[0]
-    #print "data[1] = ", data[1]
-    #print "data[2] = ", data[2]
+    data = load_row_from_map(fname, row_n, dirPath)
     try:
-        assert(fromTS(data[0]) == d)
+        assert (fromTS(data[0]) == d)
     except:
         print "wrong row extracted fromTS(data[0]) != d", fromTS(data[0]), d
-        #exit(0)
-    f.close()
+        # exit(0)
     return data
 
 
