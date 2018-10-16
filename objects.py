@@ -15,6 +15,43 @@ class station(object):
         #                   PST date: value
         #               }
     #user
+    #ds :   tif_ds
+    def bound(self):
+        for wy in self.data:
+            for day in self.data[wy]:
+                if self.data[wy][day] < 0:
+                    self.data[wy][day] = 0.0
+
+    def fill_gaps_linear(self):    #remove negatives
+        for wy in self.data.keys():
+            dates, values = self.get_time_series(wy)
+            in_gap = False
+            for i in range(len(values)):
+                if np.isnan(values[i]) and not in_gap:
+                    svi = i-1
+                    in_gap = True
+                if not(np.isnan(values[i])) and in_gap: #exiting gap
+                    evi = i
+                    rate = (values[evi] - values[svi])/(evi - svi)
+                    j = 0
+                    while j + svi < evi:
+                        values[svi + j] = values[svi] + j * rate
+                        j+=1
+                    in_gap = False
+            for d, v in zip(dates, values):
+                self.data[wy][d] = v
+
+    def get_measurement(self, day):
+        wy = self.water_year(day)
+        #print sorted(self.data[wy].keys())
+        #exit(0)
+        return self.data[wy][day]
+
+    def get_rc(self, ds):
+        if hasattr(self, 'rc'):
+            return self.rc
+        return self.latlon_2_rc(ds)
+
     def get_latlon(self):
         return self.lat_lon
 
@@ -41,10 +78,10 @@ class station(object):
         self.data[wy] = {}
         for index, row in df.iterrows():
             try:
-                self.data[wy][parser.parse(row["DATE / TIME (PST)"])] = float(row["SNOW WC INCHES"])
+                self.data[wy][(parser.parse(row["DATE / TIME (PST)"])).date()] = float(row["SNOW WC INCHES"])
             except Exception as e:
                 if row["SNOW WC INCHES"] == "--":
-                    self.data[wy][parser.parse(row["DATE / TIME (PST)"])] = np.nan
+                    self.data[wy][(parser.parse(row["DATE / TIME (PST)"])).date()] = np.nan
                 else:
                     print "parse_daily Error = ", e
                     print "     >>> index = ", index, "row = ", row
@@ -54,7 +91,7 @@ class station(object):
         self.data[wy] = {}
         for index, row in df.iterrows():
             try:
-                self.data[wy][parser.parse(row["Measured Date"])] = float(row["W.C."])
+                self.data[wy][(parser.parse(row["Measured Date"])).date()] = float(row["W.C."])
             except Exception as e:
                 print "parse_monthly Error = ", e
                 print "     >>> index = ", index, "row = ", row
@@ -130,6 +167,37 @@ class station(object):
             pass
         return df
 
+    #================ convert lat lon to margulis tiff row col
+    def coords_to_idx(self, coords_x, coords_y, gt):
+        #print "coords_x - gt[0] = ", coords_x, " - ", gt[0]
+        idx_x = np.floor((coords_x - gt[0]) / gt[1]).astype(int)
+        idx_y = np.floor((coords_y - gt[3]) / gt[5]).astype(int)
+        return idx_y, idx_x
+
+    def idx_to_coords(self, idx_y, idx_x, gt):
+        coords_x = gt[0] + idx_x * gt[1]
+        coords_y = gt[3] + idx_y * gt[5]
+        return coords_x, coords_y
+
+    def latlon_2_rc(self, ds):
+        #ds = gdal.Open(test_file)
+        #ds_geo = ds.GetGeoTransform
+        test_map = ds.GetRasterBand(1).ReadAsArray()
+        R, C = np.shape(test_map)
+        register_gt = ds.GetGeoTransform()
+        rs, cs = self.coords_to_idx(np.array([self.lat_lon[1]]),
+                                 np.array([self.lat_lon[0]]),
+                                 register_gt)
+        self.rc = [rs[0], cs[0]]
+        return self.rc
+
+    # helpers
+    def water_year(self, day):
+        if day.month >= 10:  # month is 10, 11, 12: water year is calendar year + 1
+            return day.year + 1
+        return day.year  # month is 1 -> 10: water year is calendar year
+
+
 class basin(object):
     def __init__(self, basin_name, basin_cdec_id):
         self.name       = basin_name
@@ -148,4 +216,73 @@ class basin(object):
             series[sta.cdec_id] = sta.get_time_series(wy)
         return series
 
+    def get_stations(self, station_ids):
+        stations = []
+        for st_id in station_ids:
+            stations.append(self.stations[st_id])
 
+    def get_stations_rcs(self, ds, station_ids=None):
+        rcs = []
+        if not station_ids:
+            station_ids = self.stations.keys()
+        for station_id in station_ids:
+            rcs.append(self.stations[station_id].get_rc(ds))
+        return rcs
+
+    def overlay_stations(self, ds, station_ids=None, show=True):
+        if not station_ids:
+            station_ids = self.stations.keys()
+        rcs = self.get_stations_rcs(ds, station_ids)
+
+        im = ds.GetRasterBand(1).ReadAsArray()
+        im[im < 0] = np.nan
+        rcs = np.array(rcs)
+        fig, ax = plt.subplots()
+        plt.imshow(im, interpolation="none")
+        ax.scatter(rcs[:, 1], rcs[:, 0])
+        for i, txt in enumerate(station_ids):
+            ax.annotate(txt, (rcs[:, 1][i], rcs[:, 0][i]))
+        if show:
+            plt.show()
+
+    def get_measurements(self, day, station_ids=None):
+        measurements = []
+        if not station_ids:
+            station_ids = self.stations.keys()
+        for sta_id in station_ids:
+            measurements.append(self.stations[sta_id].get_measurement(day))
+        return measurements
+
+    def bound_stations_data(self, station_ids=None):
+        if not station_ids:
+            station_ids = self.stations.keys()
+        for sta_id in station_ids:
+            self.stations[sta_id].bound()
+
+    def fill_stations_data_gap_linear(self, station_ids=None):
+        if not station_ids:
+            station_ids = self.stations.keys()
+        for sta_id in station_ids:
+            self.stations[sta_id].fill_gaps_linear()
+
+    def show_stations_data_all(self, wys, only_pillows=False):
+        for wy in wys:
+            key_dt_val = self.get_stations_time_series_data(wy, only_pillows=only_pillows)
+            for key in key_dt_val.keys():
+                if key_dt_val[key] is not None:
+                    plt.plot( key_dt_val[key][0], key_dt_val[key][1], label=key)
+            plt.legend()
+            plt.show()
+
+    def show_stations_data(self, wys, station_ids=None, show=True):
+        if not station_ids:
+            station_ids = self.stations.keys()
+        for wy in wys:
+            plt.figure()
+            for sta_id in station_ids:
+                dt_val = self.stations[sta_id].get_time_series(wy)
+                plt.plot(dt_val[0], dt_val[1], label=sta_id)
+            plt.legend()
+            plt.title("Water year = "+ str(wy))
+        if show:
+            plt.show()

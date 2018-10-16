@@ -1,23 +1,11 @@
 from funcDefines import *
+from settings import *
 import confidential
 
-DOWNLOADS       = "downloads/"
-OUTPUT          = "output/"
 
-C_DOWNLOAD_PARSE_CDEC   =   0 #False
+C_DOWNLOAD_PARSE_CDEC   =   1 #False
 C_VIZ_CDEC              =   1
 
-if not os.path.exists(OUTPUT):
-    os.mkdir(OUTPUT)
-
-verbose = 0
-
-TYPE = "SWE"
-#define water years and basin of interest
-basins = ["Feather"]
-#get cdec sensors locations
-
-wys = [2015, 2016, 2017]
 
 if C_DOWNLOAD_PARSE_CDEC:
     for basin_name in basins:
@@ -33,15 +21,9 @@ if C_DOWNLOAD_PARSE_CDEC:
             pass
         cPickle.dump(basin_obj, open( OUTPUT + basin_name + ".cPickle", "wb" ))
 
+
 if C_VIZ_CDEC:
     for basin_name in basins:
-        for wy in wys:
-            basin_obj = cPickle.load(open(OUTPUT + basin_name + ".cPickle", "rb"))
-            key_dt_val = basin_obj.get_stations_time_series_data(wy, only_pillows=True)
-            for key in key_dt_val.keys():
-                if key_dt_val[key] is not None:
-                    plt.plot( key_dt_val[key][0], key_dt_val[key][1], label=key)
-            plt.legend()
-            plt.show()
-
+        basin_obj = cPickle.load(open(OUTPUT + basin_name + ".cPickle", "rb"))
+        basin_obj.show_stations_data()
 

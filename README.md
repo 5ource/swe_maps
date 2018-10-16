@@ -47,4 +47,10 @@ class station
 }
 ```
 
-`conda install -n swe_maps -c conda-forge matplotlib`\
+`conda install -n swe_maps -c conda-forge matplotlib`
+
+`conda install -n swe_maps scikit-learn`
+
+`conda install -n swe_maps -c conda-forge gdal`
+
+`conda install -n swe_maps -c conda-forge libnetcdf`
