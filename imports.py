@@ -12,3 +12,7 @@ from sklearn.metrics import mean_squared_error
 from math import sqrt
 import tables
 import time
+
+import gdal
+
+from collections import defaultdict

@@ -60,9 +60,11 @@ def cdec_get_basin_stations_meta(basin_name, type, fpath, debug = 0):
             print(df)
     stations = {}
     for index, row in df.iterrows():
+        #print ">>>>>    index, row = ", index, row
+        #exit(0)
         try:
             stations[row["ID"]] = station([row["Latitude"], row["Longitude"]], type, CDEC_SENSOR_TYPES[type], row["ID"],
-                                    row["Operator"])
+                                    row["Operator"], row["ElevationFeet"])
             #print row["ID"]
         except Exception as e:
             print "cdec_get_basin_stations_meta Error : ", e.message
@@ -156,7 +158,7 @@ def predict_SWE_map(obs, obs_rcs, static_ens, R, C, v=1):
     # background    -   dim x N
     back = np.mean(static_ens, 1).reshape([R, C])
     # get optimal alpha
-    alpha = get_optimal_alpha(back, obs, obs_rcs, static_ens, v=v)
+    alpha, cv_error = get_optimal_alpha(back, obs, obs_rcs, static_ens, v=v)
     swe_obs_cov = np.diag(np.square(PERCENT_OBS_STD * obs + 0.1))
     if v: print "optimal alpha = ", alpha
     if alpha > 0:
@@ -168,7 +170,7 @@ def predict_SWE_map(obs, obs_rcs, static_ens, R, C, v=1):
         newMap = newPsi.reshape([R, C])
     else:
         newMap = back
-    return newMap
+    return newMap, cv_error
 
 
 
@@ -203,3 +205,75 @@ def visualize_corr(n_N_ensemble, rc, pix_id, R, C):
     plt.colorbar()
     plt.scatter()
     plt.show()
+
+
+def save_array_as_tif_similar_to(array2d, sample_ds, outFileName, outDir):
+    if not os.path.exists(outDir):
+        os.mkdir(outDir)
+    [cols, rows] = np.shape(array2d) #sample_ds.GetRasterBand(1).ReadAsArray().shape
+    driver = gdal.GetDriverByName("GTiff")
+    outdata = driver.Create(outDir + "/" + outFileName + ".tif", rows, cols, 1, gdal.GDT_Float32)
+    outdata.SetGeoTransform(sample_ds.GetGeoTransform())  ##sets same geotransform as input
+    outdata.SetProjection(sample_ds.GetProjection())  ##sets same projection as input
+    outdata.GetRasterBand(1).WriteArray(array2d)
+    outdata.GetRasterBand(1).SetNoDataValue(-999)  ##if you want these values transparent
+    outdata.FlushCache()  ##saves to disk!!
+    outdata = None
+    band = None
+    ds = None
+
+def get_map(d, dirPath):
+    dest = dirPath + str(water_year(d)) + "/"+ str(d) + ".tif"
+    print dest
+    ds = gdal.Open(dest)
+    print ds
+    map = ds.GetRasterBand(1).ReadAsArray()
+    print np.shape(map)
+    map[map < 0] = np.nan
+    return map
+
+
+def save_Ens_Margulis_temporal(startDate, endDate, srcDir, dstFile, rcs):
+    d = startDate
+    rcs= np.array(rcs)
+    print rcs
+    #swe_rWY_cRCdailySWE = np.array([0, 2920])      #rows are water years, columns are RC daily SWE
+    cur_wy = water_year(startDate)
+    newWaterYear = False
+    firstYear = True
+    conc = []
+    while d < endDate:
+        if 1: print d
+        year = d.year
+        if d.month >= 10:
+            f = srcDir + "{0}/{1}.tif".format(year+1, d.strftime("%Y%m%d"))     #because stored as water year
+        else:
+            f = srcDir  + "{0}/{1}.tif".format(year, d.strftime("%Y%m%d"))
+        swemap = gdal.Open(f, gdal.GA_ReadOnly)
+        if  water_year(d) != cur_wy:
+            newWaterYear = True
+            cur_wy = water_year(d)
+        if swemap is not None:
+            swemap = swemap.ReadAsArray()
+            swemap = np.array(swemap)
+            print np.shape(swemap)
+            if newWaterYear:
+                if firstYear:
+                    #conc = conc.reshape([1, len(conc)])
+                    swe_rWY_cRCdailySWE = conc
+                    firstYear = False
+                else:
+                    #conc = conc.reshape([1, len(conc)])
+                    swe_rWY_cRCdailySWE = np.concatenate([swe_rWY_cRCdailySWE, conc], axis=0)
+                    conc = []
+                    newWaterYear = False
+                    print np.shape(swe_rWY_cRCdailySWE)
+            else:
+                conc = np.concatenate([conc, swemap[rcs[:, 0], rcs[:, 1]]])
+
+            print "conc = ", np.shape(conc)
+        else:
+            print "File ", f, "not found! date = ", d
+        #print "swe_maps_hist = ", swe_maps_hist
+        d+=dt.timedelta(days=1)
+    np.save(dstFile, swe_rWY_cRCdailySWE)
