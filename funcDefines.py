@@ -250,26 +250,31 @@ def save_Ens_Margulis_temporal(startDate, endDate, srcDir, dstFile, rcs):
         else:
             f = srcDir  + "{0}/{1}.tif".format(year, d.strftime("%Y%m%d"))
         swemap = gdal.Open(f, gdal.GA_ReadOnly)
-        if  water_year(d) != cur_wy:
+        if  water_year(d + dt.timedelta(days=1)) != cur_wy:
             newWaterYear = True
-            cur_wy = water_year(d)
+            cur_wy = water_year(d + dt.timedelta(days=1))
         if swemap is not None:
             swemap = swemap.ReadAsArray()
             swemap = np.array(swemap)
             print np.shape(swemap)
             if newWaterYear:
                 if firstYear:
-                    #conc = conc.reshape([1, len(conc)])
+                    conc = np.reshape(conc, [1, len(conc)])
                     swe_rWY_cRCdailySWE = conc
                     firstYear = False
+                    conc = []
                 else:
-                    #conc = conc.reshape([1, len(conc)])
+                    conc = np.reshape(conc, [1, len(conc)])
+                    print "shape conc = ", np.shape(conc)
+                    print "shape swe_rWY_cRCdailySWE = ", np.shape(swe_rWY_cRCdailySWE)
                     swe_rWY_cRCdailySWE = np.concatenate([swe_rWY_cRCdailySWE, conc], axis=0)
                     conc = []
                     newWaterYear = False
-                    print np.shape(swe_rWY_cRCdailySWE)
+                    #print np.shape(swe_rWY_cRCdailySWE)
+                    #exit(0)
+                newWaterYear = False
             else:
-                conc = np.concatenate([conc, swemap[rcs[:, 0], rcs[:, 1]]])
+                conc = conc + swemap[rcs[:, 0], rcs[:, 1]].tolist()
 
             print "conc = ", np.shape(conc)
         else:

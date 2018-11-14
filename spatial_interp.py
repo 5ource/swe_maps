@@ -70,21 +70,37 @@ if C_GENERATE_MAPS:
                           Years=None, debug=0, reduce=1, modis=0)
 
     for basin_name in basins:
-
         #load basin obs
         basin_obj = cPickle.load(open(OUTPUT + basin_name + ".cPickle", "rb"))
 
         # specify pillow IDS of interest
         PILLOW_IDS_OF_INTEREST = ["BKL", "FOR", "GRZ", "HMB", "HRK", "KTL", "PLP", "RTL"]
-        pillow_ids = PILLOW_IDS_OF_INTEREST
+        #pillow_ids = PILLOW_IDS_OF_INTEREST
+
+        if not C_PILLOWS_ONLY:
+            # find stations in bound of map area
+            ds = gdal.Open(PATHS["Feather Margulis SWE"] + "2016/20160401.tif")
+            # sample_map = ds.GetRasterBand(1).ReadAsArray()
+            active_inbound_sta = basin_obj.get_stations_in_bound(ds, activeOnly=True, noVal=-999)
+            if 1:
+                print active_inbound_sta
+                print basin_obj.get_stations_ids()
+                # basin_obj.show_stations_data(wys, station_ids=active_inbound_sta, show=True)
+                # checking the difference
+                # exit(0)
+
+        if C_PILLOWS_ONLY:
+            station_ids_of_interest = PILLOW_IDS_OF_INTEREST
+        else:
+            station_ids_of_interest = active_inbound_sta
 
         # generate pillow rc locations of IDS
         ds = gdal.Open(PATHS["Feather Margulis SWE"] + "2016/20160401.tif")
         sample_map = ds.GetRasterBand(1).ReadAsArray()
         R, C = np.shape(sample_map)
-        rcs = basin_obj.get_stations_rcs(ds, station_ids=pillow_ids)
+        rcs = basin_obj.get_stations_rcs(ds, station_ids=station_ids_of_interest)
 
-        if 1: print rcs
+        #if 1: print rcs
 
         if C_GENERATE_STATIC_TEMPORAL_ENS:
             fromDate = dt.date(CONSTANTS["Margulis SWE Year Range"][0] - 1, 10, 1)
@@ -92,18 +108,8 @@ if C_GENERATE_MAPS:
             src_swe_path = PATHS["Feather Margulis SWE"]
             reduced_Path = STATIC_TENS_PATH
             save_Ens_Margulis_temporal(fromDate, toDate, src_swe_path, reduced_Path, rcs)
-
-        if not C_PILLOWS_ONLY:
-            #find stations in bound of map area
-            ds = gdal.Open(PATHS["Feather Margulis SWE"] + "2016/20160401.tif")
-            #sample_map = ds.GetRasterBand(1).ReadAsArray()
-            active_inbound_sta = basin_obj.get_stations_in_bound(ds, activeOnly=True, noVal=-999)
-            if 1:
-                print active_inbound_sta
-                print basin_obj.get_stations_ids()
-                #basin_obj.show_stations_data(wys, station_ids=active_inbound_sta, show=True)
-            #checking the difference
-            #exit(0)
+            #   rc1_SWE_365_days \  rc2_SWE_365_days \ ...
+            exit(0)
 
         # filter gaps and negatives
         if C_FILTER:
@@ -117,7 +123,7 @@ if C_GENERATE_MAPS:
                 fromd += dt.timedelta(days = 1)
             basin_obj.stations["FOR"].data[2017][fromd] = 0.0
             basin_obj.fill_stations_data_gap_linear()
-            if 0: basin_obj.show_stations_data(wys, station_ids=pillow_ids, show=True)
+            if 0: basin_obj.show_stations_data(wys, station_ids=station_ids_of_interest, show=True)
             #exit(0)
 
         # temporally interpolate snowcourses to form "snowpillows"
@@ -125,7 +131,7 @@ if C_GENERATE_MAPS:
             basin_obj.temp_interp_courses(active_inbound_sta, ds)
             if 1: basin_obj.show_stations_data(wys, station_ids=active_inbound_sta, show=True)
         #visualize data
-        if 0: basin_obj.show_stations_data(wys, station_ids=pillow_ids, show=True)
+        if 0: basin_obj.show_stations_data(wys, station_ids=station_ids_of_interest, show=True)
 
         if 1:
             # load static ensemble readonly
@@ -153,7 +159,7 @@ if C_GENERATE_MAPS:
             exit(0)
 
         if 0:   #plot map and sensors
-            basin_obj.overlay_stations(ds, pillow_ids, show=False)
+            basin_obj.overlay_stations(ds, station_ids_of_interest, show=False)
             plt.colorbar()
             plt.show()
             exit(0)
@@ -186,7 +192,7 @@ if C_GENERATE_MAPS:
                     print "rowsThresh = 0"
                     rowsThresh = 0
                 # 1. get observations
-                obs = basin_obj.get_measurements(d, pillow_ids)
+                obs = basin_obj.get_measurements(d, station_ids_of_interest)
                 obs = np.array(obs) * IN_2_MM
                 print d, obs
                 if (obs <= 0).all():
