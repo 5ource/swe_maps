@@ -18,7 +18,7 @@ functools32==3.2.3.post2
 future==0.16.0
 futures==3.2.0
 geojson==2.3.0
-html5lib==0.9999999
+html5lib==0.99999999
 idna==2.7
 ipaddress==1.0.22
 isodate==0.6.0
